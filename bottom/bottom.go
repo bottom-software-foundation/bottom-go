@@ -1,7 +1,5 @@
 package bottom
 
-import "fmt"
-
 type character struct {
 	value byte
 	chars []string
@@ -27,7 +25,6 @@ func Encode(s string) (out string) {
 		}
 		for sChar != 0 {
 			for _, char := range characterValues {
-				fmt.Println(char)
 				if sChar >= char.value {
 					sChar -= char.value
 					out += char.chars[0]
