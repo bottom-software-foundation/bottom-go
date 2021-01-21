@@ -17,7 +17,12 @@ func main() {
 		os.Exit(1)
 	}
 	if *decode {
-		fmt.Println(bottom.Decode(input))
+		out, err := bottom.Decode(input)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		fmt.Println(out)
 	} else {
 		fmt.Println(bottom.Encode(input))
 	}
