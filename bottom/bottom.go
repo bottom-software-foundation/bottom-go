@@ -1,5 +1,10 @@
 package bottom
 
+import (
+	"errors"
+	"strings"
+)
+
 type character struct {
 	value byte
 	chars []string
@@ -33,6 +38,63 @@ func Encode(s string) (out string) {
 			}
 		}
 		out += sectionSeparator
+	}
+	return
+}
+
+func validateChar(c string, char character) bool {
+	for _, charChar := range char.chars {
+		if c == charChar {
+			return true
+		}
+	}
+	return false
+}
+
+// Validate validates a bottom string
+func Validate(bottom string) bool {
+	if !strings.HasSuffix(bottom, sectionSeparator) {
+		return false
+	}
+	bottom = strings.Replace(bottom, sectionSeparator, "", -1)
+	for _, inputCharRune := range bottom {
+		inputChar := string(inputCharRune)
+		if validateChar(inputChar, zeroCharacter) {
+			continue
+		}
+		valid := false
+		for _, char := range characterValues {
+			if validateChar(inputChar, char) {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return false
+		}
+	}
+	return true
+}
+
+// Decode decodes a bottom string
+func Decode(b string) (out string, err error) {
+	if !Validate(b) {
+		return "", errors.New("Invalid bottom text")
+	}
+	b = b[:len(b) - 2]
+	for _, outCharBlock := range strings.Split(b, sectionSeparator) {
+		var sum byte = 0
+		for _, bottomCharRune := range outCharBlock {
+			bottomChar := string(bottomCharRune)
+			for _, char := range characterValues {
+				for _, charChar := range char.chars {
+					if charChar == bottomChar {
+						sum += char.value
+					}
+				}
+			}
+		}
+		out += string(sum)
 	}
 	return
 }

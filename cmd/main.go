@@ -17,8 +17,7 @@ func main() {
 		os.Exit(1)
 	}
 	if *decode {
-		fmt.Println("Decoding is currently unsupported")
-		os.Exit(1)
+		fmt.Println(bottom.Decode(input))
 	} else {
 		fmt.Println(bottom.Encode(input))
 	}
