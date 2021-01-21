@@ -7,16 +7,16 @@ import (
 
 type character struct {
 	value byte
-	chars []string
+	char  string
 }
 
-var zeroCharacter = character{value: 0, chars: []string{"\u2764", "\uFE0F"}}
+var zeroCharacter = character{value: 0, char: "\u2764\uFE0F"}
 var characterValues = [5]character{
-	{value: 200, chars: []string{"\U0001FAC2"}},
-	{value: 50, chars: []string{"\U0001F496"}},
-	{value: 10, chars: []string{"\U00002728"}},
-	{value: 5, chars: []string{"\U0001F97A"}},
-	{value: 1, chars: []string{"\u002C"}},
+	{value: 200, char: "\U0001FAC2"},
+	{value: 50, char: "\U0001F496"},
+	{value: 10, char: "\U00002728"},
+	{value: 5, char: "\U0001F97A"},
+	{value: 1, char: "\u002C"},
 }
 
 const sectionSeparator = "\U0001F449\U0001F448"
@@ -25,14 +25,14 @@ const sectionSeparator = "\U0001F449\U0001F448"
 func Encode(s string) (out string) {
 	for _, sChar := range []byte(s) {
 		if sChar == 0 {
-			out += zeroCharacter.chars[0]
+			out += zeroCharacter.char
 			continue
 		}
 		for sChar != 0 {
 			for _, char := range characterValues {
 				if sChar >= char.value {
 					sChar -= char.value
-					out += char.chars[0]
+					out += char.char
 					break
 				}
 			}
@@ -40,15 +40,6 @@ func Encode(s string) (out string) {
 		out += sectionSeparator
 	}
 	return
-}
-
-func validateChar(c string, char character) bool {
-	for _, charChar := range char.chars {
-		if c == charChar {
-			return true
-		}
-	}
-	return false
 }
 
 // Validate validates a bottom string
@@ -59,12 +50,12 @@ func Validate(bottom string) bool {
 	bottom = strings.Replace(bottom, sectionSeparator, "", -1)
 	for _, inputCharRune := range bottom {
 		inputChar := string(inputCharRune)
-		if validateChar(inputChar, zeroCharacter) {
+		if inputChar == zeroCharacter.char {
 			continue
 		}
 		valid := false
 		for _, char := range characterValues {
-			if validateChar(inputChar, char) {
+			if char.char == inputChar {
 				valid = true
 				break
 			}
@@ -81,16 +72,14 @@ func Decode(b string) (out string, err error) {
 	if !Validate(b) {
 		return "", errors.New("Invalid bottom text")
 	}
-	b = b[:len(b) - 2]
+	b = b[:len(b)-2]
 	for _, outCharBlock := range strings.Split(b, sectionSeparator) {
 		var sum byte = 0
 		for _, bottomCharRune := range outCharBlock {
 			bottomChar := string(bottomCharRune)
 			for _, char := range characterValues {
-				for _, charChar := range char.chars {
-					if charChar == bottomChar {
-						sum += char.value
-					}
+				if char.char == bottomChar {
+					sum += char.value
 				}
 			}
 		}
