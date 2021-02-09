@@ -73,6 +73,7 @@ func Decode(b string) (out string, err error) {
 		return "", errors.New("Invalid bottom text")
 	}
 	b = b[:len(b)-2]
+	o := []byte{}
 	for _, outCharBlock := range strings.Split(b, sectionSeparator) {
 		var sum byte = 0
 		for _, bottomCharRune := range outCharBlock {
@@ -83,7 +84,8 @@ func Decode(b string) (out string, err error) {
 				}
 			}
 		}
-		out += string(sum)
+		o = append(o, sum)
 	}
+	out = string(o)
 	return
 }
