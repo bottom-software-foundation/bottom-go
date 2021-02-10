@@ -1,0 +1,35 @@
+name: Test
+
+on:
+  - push
+  - pull_request
+  - workflow_dispatch
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: "^1.15.8"
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2
+        with:
+          version: v1.36
+      - name: Benchmark
+        run: |
+          cd bottom
+          go test -bench=.
+      - name: Test
+        id: test
+        run: |
+          cd bottom
+          go test -coverprofile=coverage.txt -covermode=atomic
+      - name: Upload to codecov
+        if: steps.test.outcome == 'success' || steps.test.outcome == 'failure'
+        uses: codecov/codecov-action@v1
+        with:
+          file: ./coverage.txt
