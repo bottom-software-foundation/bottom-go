@@ -1,0 +1,16 @@
+name: LSIF
+
+on:
+  - push
+  - workflow_dispatch
+
+jobs:
+  lsif-sourcegraph:
+    runs-on: ubuntu-latest
+    container: sourcegraph/lsif-go:v1
+    steps:
+      - uses: actions/checkout@v2
+      - name: Generate LSIF data
+        run: lsif-go
+      - name: Upload LSIF data to sourcegraph.com
+        run: src lsif upload -github-token=${{ secrets.GITHUB_TOKEN }} -ignore-upload-failure -no-progress
