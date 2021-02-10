@@ -32,4 +32,4 @@ jobs:
         if: steps.test.outcome == 'success' || steps.test.outcome == 'failure'
         uses: codecov/codecov-action@v1
         with:
-          file: ./coverage.txt
+          file: ./bottom/coverage.txt
