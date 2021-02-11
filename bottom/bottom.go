@@ -103,19 +103,36 @@ func EncodedLen(s string) int {
 }
 
 // EncodeTo encodes the given string into the writer.
-func EncodeTo(out io.StringWriter, s string) (int, error) {
+func EncodeTo(out io.StringWriter, s string) error {
 	var sum int
 
 	for _, sChar := range []byte(s) {
 		n, err := out.WriteString(valueCharacters[sChar])
 		if err != nil {
-			return sum, err
+			return err
 		}
 
 		sum += n
 	}
 
-	return sum, nil
+	return nil
+}
+
+// EncodeFrom encodes from the given src reader to out.
+func EncodeFrom(out io.StringWriter, src io.ByteReader) error {
+	for {
+		b, err := src.ReadByte()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+
+		if _, err = out.WriteString(valueCharacters[b]); err != nil {
+			return err
+		}
+	}
 }
 
 // Validate validates a bottom string.
