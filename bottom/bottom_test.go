@@ -106,7 +106,7 @@ func BenchmarkEncodeTo(b *testing.B) {
 
 	var w noopWriter
 	for i := 0; i < b.N; i++ {
-		_, _ = EncodeTo(w, testCase.out)
+		_ = EncodeTo(w, testCase.out)
 	}
 }
 
