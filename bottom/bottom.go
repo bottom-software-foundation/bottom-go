@@ -8,8 +8,6 @@ import (
 	"io"
 	"strings"
 	"unicode/utf8"
-
-	"github.com/nihaals/bottom-go/bottom/internal/unsafebytes"
 )
 
 const (
@@ -82,14 +80,14 @@ func calculateValueCharacters() [255]string {
 
 // Encode encodes a string in bottom
 func Encode(s string) string {
-	out := make([]byte, EncodedLen(s))
-	sum := 0
+	builder := strings.Builder{}
+	builder.Grow(EncodedLen(s))
 
 	for _, sChar := range []byte(s) {
-		sum += copy(out[sum:], valueCharacters[sChar])
+		builder.WriteString(valueCharacters[sChar])
 	}
 
-	return unsafebytes.String(out)
+	return builder.String()
 }
 
 // EncodedLen returns the length of the encoded string in exact.
@@ -190,7 +188,8 @@ func Decode(bottom string) (string, error) {
 		return "", errors.New("invalid bottom text")
 	}
 
-	buf := make([]byte, l)
+	builder := strings.Builder{}
+	builder.Grow(l)
 
 	var i int
 	for i < l {
@@ -199,12 +198,12 @@ func Decode(bottom string) (string, error) {
 			break
 		}
 
-		buf[i] = sumByte(bottom[:m])
+		builder.WriteByte(sumByte(bottom[:m]))
 		bottom = bottom[m+len(sectionSeparator):]
 		i++
 	}
 
-	return unsafebytes.String(buf), nil
+	return builder.String(), nil
 }
 
 // DecodeTo decodes the given bottom string into the given byte writer.
