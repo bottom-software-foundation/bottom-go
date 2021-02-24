@@ -1,8 +1,10 @@
 name: LSIF
 
 on:
-  - push
-  - workflow_dispatch
+  push:
+    branches:
+      - "**"
+  workflow_dispatch:
 
 jobs:
   lsif-sourcegraph:
