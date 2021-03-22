@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"unicode/utf8"
 )
 
 const (
@@ -21,22 +20,54 @@ const (
 	sectionSeparator = "\U0001F449\U0001F448"
 )
 
-// characterValues looks up known runes; it returns 0 for unknown runes.
-func characterValues(s rune) byte {
-	switch s {
-	case char1:
-		return 1
-	case char5:
-		return 5
-	case char10:
-		return 10
-	case char50:
-		return 50
-	case char200:
-		return 200
-	default:
-		return 0 // unknown
+// sumByte sums up the given part string. If the sum overflows a byte or an
+// invalid input is encountered, then an error wrapped with wrapChunkError is
+// returned.
+func sumByte(part string) (byte, error) {
+	partRune := []rune(part)
+
+	var sum int
+
+	for i := 0; i < len(partRune); i++ {
+		switch r := partRune[i]; r {
+		case []rune(char0)[0]:
+			// Edge case: null-byte emoji must have a valid byte after it.
+			// Ensure that we can peak to the next byte for this.
+			if i >= len(partRune)-1 {
+				// The string stopped short when we're expecting another rune,
+				// so an UnexpectedEOF is valid.
+				return 0, wrapChunkError(part, io.ErrUnexpectedEOF)
+			}
+			if []rune(char0)[1] != partRune[i+1] {
+				return 0, wrapChunkError(part, InvalidRuneError(r))
+			}
+			i++ // skip peeked rune
+			sum += 0
+		case char1:
+			sum += 1
+		case char5:
+			sum += 5
+		case char10:
+			sum += 10
+		case char50:
+			sum += 50
+		case char200:
+			sum += 200
+		default:
+			return 0, wrapChunkError(part, InvalidRuneError(r))
+		}
 	}
+
+	if sum > 0xFF {
+		return 0, wrapChunkError(part, ErrByteOverflow)
+	}
+
+	return byte(sum), nil
+}
+
+// wrapChunkError wraps the given error with a "failed to decode chunk" error.
+func wrapChunkError(part string, err error) error {
+	return fmt.Errorf("failed to decode chunk %q: %w", part, err)
 }
 
 // valueCharacterBases looks up known values for the corresponding runes; it
@@ -54,9 +85,12 @@ var valueCharacterBases = [255]string{
 var valueCharacters = calculateValueCharacters()
 
 func calculateValueCharacters() [255]string {
-	var values = []byte{200, 50, 10, 5, 1}
-	var valueCharacters = [255]string{0: char0}
 	var buf bytes.Buffer
+
+	values := []byte{200, 50, 10, 5, 1}
+	valueCharacters := [255]string{
+		0: char0 + sectionSeparator,
+	}
 
 	for i := byte(1); i < 255; i++ {
 		char := i
@@ -76,6 +110,20 @@ func calculateValueCharacters() [255]string {
 	}
 
 	return valueCharacters
+}
+
+// ErrByteOverflow is returned when the given input string overflows a byte when
+// decoded.
+var ErrByteOverflow = errors.New("sum overflows byte")
+
+// InvalidRuneError is returned when an invalid rune is encountered when
+// decoding.
+type InvalidRuneError rune
+
+// Error formats InvalidRuneError to show the quoted rune and the Unicode
+// codepoint notation.
+func (r InvalidRuneError) Error() string {
+	return fmt.Sprintf("unexpected rune %q (%U)", rune(r), rune(r))
 }
 
 // Encode encodes a string in bottom
@@ -102,15 +150,11 @@ func EncodedLen(s string) int {
 
 // EncodeTo encodes the given string into the writer.
 func EncodeTo(out io.StringWriter, s string) error {
-	var sum int
-
 	for _, sChar := range []byte(s) {
-		n, err := out.WriteString(valueCharacters[sChar])
+		_, err := out.WriteString(valueCharacters[sChar])
 		if err != nil {
 			return err
 		}
-
-		sum += n
 	}
 
 	return nil
@@ -133,7 +177,8 @@ func EncodeFrom(out io.StringWriter, src io.ByteReader) error {
 	}
 }
 
-// Validate validates a bottom string.
+// Validate validates a bottom string. False is returned if the validation
+// fails.
 func Validate(bottom string) bool {
 	return DecodedLen(bottom) > -1
 }
@@ -141,8 +186,15 @@ func Validate(bottom string) bool {
 // DecodedLen validates the given bottom string and returns the calculated
 // length. It returns -1 if the given bottom string is invalid.
 func DecodedLen(bottom string) int {
+	l, _ := decodedLen(bottom, true)
+	return l
+}
+
+// decodedLen is the implementation of DecodedLen that returns an error if the
+// input bottom string is invalid.
+func decodedLen(bottom string, verify bool) (int, error) {
 	if !strings.HasSuffix(bottom, sectionSeparator) {
-		return -1
+		return -1, errors.New("missing trailing separator")
 	}
 
 	// We used to trim the sectionSeparator suffix here, but since our current
@@ -151,7 +203,7 @@ func DecodedLen(bottom string) int {
 	//
 	// This assumption is validated by the above HasSuffix check.
 
-	var length, sum int
+	var length int
 
 	for {
 		m := strings.Index(bottom, sectionSeparator)
@@ -159,17 +211,10 @@ func DecodedLen(bottom string) int {
 			break
 		}
 
-		sum = 0
-
-		for _, r := range bottom[:m] {
-			v := characterValues(r)
-			if v == 0 {
-				return -1
-			}
-
-			// overflow check
-			if sum += int(v); sum > 0xFF {
-				return -1
+		if verify {
+			_, err := sumByte(string(bottom[:m]))
+			if err != nil {
+				return -1, err
 			}
 		}
 
@@ -177,15 +222,16 @@ func DecodedLen(bottom string) int {
 		bottom = bottom[m+len(sectionSeparator):]
 	}
 
-	return length
+	return length, nil
 }
 
 // Decode verifies and decodes a bottom string. An error is returned if the
 // verification fails.
 func Decode(bottom string) (string, error) {
-	l := DecodedLen(bottom)
-	if l == -1 {
-		return "", errors.New("invalid bottom text")
+	// Skip verification, since we're doing it in the loop.
+	l, err := decodedLen(bottom, false)
+	if err != nil {
+		return "", err
 	}
 
 	builder := strings.Builder{}
@@ -198,7 +244,12 @@ func Decode(bottom string) (string, error) {
 			break
 		}
 
-		builder.WriteByte(sumByte(bottom[:m]))
+		sum, err := sumByte(bottom[:m])
+		if err != nil {
+			return "", err
+		}
+
+		builder.WriteByte(sum)
 		bottom = bottom[m+len(sectionSeparator):]
 		i++
 	}
@@ -214,7 +265,12 @@ func DecodeTo(w io.ByteWriter, bottom string) error {
 			break
 		}
 
-		if err := w.WriteByte(sumByte(bottom[:m])); err != nil {
+		sum, err := sumByte(bottom[:m])
+		if err != nil {
+			return err
+		}
+
+		if err := w.WriteByte(sum); err != nil {
 			return err
 		}
 
@@ -224,34 +280,18 @@ func DecodeTo(w io.ByteWriter, bottom string) error {
 	return nil
 }
 
-func sumByte(part string) (sum byte) {
-	for _, r := range part {
-		sum += characterValues(r)
-	}
-	return
-}
-
 // DecodeFrom decodes from a src reader.
 func DecodeFrom(w io.ByteWriter, src io.Reader) error {
 	scanner := bufio.NewScanner(src)
 	scanner.Split(scanUntilSeparator)
 
-	var sum byte
 	for scanner.Scan() {
-		sum = 0
-		bytes := scanner.Bytes()
-
-		for len(bytes) > 0 {
-			r, sz := utf8.DecodeRune(bytes)
-			if sz == -1 {
-				return fmt.Errorf("invalid bytes %q", bytes)
-			}
-
-			sum += characterValues(r)
-			bytes = bytes[sz:]
+		sum, err := sumByte(scanner.Text())
+		if err != nil {
+			return err
 		}
 
-		if err := w.WriteByte(sum); err != nil {
+		if err := w.WriteByte(byte(sum)); err != nil {
 			return err
 		}
 	}
@@ -259,6 +299,8 @@ func DecodeFrom(w io.ByteWriter, src io.Reader) error {
 	return scanner.Err()
 }
 
+// scanUntilSeparator is used with bufio.Scanner to scan chunks separated by
+// sectionSeparator.
 func scanUntilSeparator(data []byte, eof bool) (int, []byte, error) {
 	if eof && len(data) == 0 {
 		return 0, nil, nil
