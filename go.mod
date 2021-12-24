@@ -1,3 +1,3 @@
-module github.com/nihaals/bottom-go
+module github.com/bottom-software-foundation/bottom-go
 
 go 1.15

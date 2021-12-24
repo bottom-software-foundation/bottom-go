@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nihaals/bottom-go/bottom"
+	"github.com/bottom-software-foundation/bottom-go/bottom"
 )
 
 func init() {
